@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Ultra HD Quyosh Tizimi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #020617;
+            font-family: 'Inter', sans-serif;
+            color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            overflow: hidden;
+        }
+        #canvas-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+        /* Custom UI Styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .planet-label {
+            position: absolute;
+            z-index: 10;
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -100%);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: rgba(10, 15, 30, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+            white-space: nowrap;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            will-change: transform, opacity;
+        }
+        .planet-label::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: rgba(10, 15, 30, 0.85) transparent;
+            display: block;
+            width: 0;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+    
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Post-processing for Ultra HD Glow & Bloom Effects -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 overflow-hidden select-none">
+
+    <!-- Fullscreen Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Planet HTML Labels Container -->
+    <div id="labels-container" class="pointer-events-none absolute inset-0 z-10 overflow-hidden"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[95%] max-w-5xl">
+        <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-2xl overflow-x-auto no-scrollbar gap-2">
+            <div class="flex items-center gap-3 pr-3 border-r border-slate-700/60 shrink-0">
+                <i class="fa-solid fa-sun text-amber-400 text-xl animate-spin-slow"></i>
+                <span class="font-bold text-sm tracking-wider uppercase bg-gradient-to-r from-amber-200 via-orange-300 to-amber-500 bg-clip-text text-transparent">Quyosh Tizimi HD</span>
+            </div>
+            
+            <nav id="planet-nav" class="flex items-center gap-1.5 px-1 overflow-x-auto no-scrollbar">
+                <!-- Nav items generated via JavaScript -->
+            </nav>
+
+            <button id="reset-cam-btn" class="shrink-0 ml-auto sm:ml-2 px-3 py-1.5 rounded-xl bg-indigo-600/70 hover:bg-indigo-500 text-xs font-semibold transition flex items-center gap-1.5 border border-indigo-400/30">
+                <i class="fa-solid fa-compress"></i> <span class="hidden sm:inline">Umumiy Ko'rinish</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Side Control Panel -->
+    <aside class="absolute bottom-6 left-6 z-20 flex flex-col gap-3">
+        <div class="glass-panel rounded-2xl p-4 w-60 sm:w-64 shadow-xl flex flex-col gap-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-cyan-400"></i> Boshqaruv Panel
+            </h3>
+
+            <div class="space-y-3 text-xs">
+                <!-- Speed Slider -->
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex justify-between font-medium">
+                        <span class="text-slate-300">Vaqt Tezligi:</span>
+                        <span id="speed-val" class="text-cyan-400 font-semibold">1x</span>
+                    </div>
+                    <input type="range" id="time-speed" min="0" max="5" step="0.1" value="1" 
+                           class="w-full accent-cyan-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                </div>
+
+                <!-- Toggles -->
+                <div class="pt-2 border-t border-slate-800 space-y-2">
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-slate-300">Orbita yo'llari</span>
+                        <input type="checkbox" id="toggle-orbits" checked class="sr-only peer">
+                        <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500 relative"></div>
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-slate-300">Sayyora Nomlari</span>
+                        <input type="checkbox" id="toggle-labels" checked class="sr-only peer">
+                        <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500 relative"></div>
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-slate-300">Yulduz Turkumlari</span>
+                        <input type="checkbox" id="toggle-constellations" checked class="sr-only peer">
+                        <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500 relative"></div>
+                    </label>
+
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-slate-300">Glow / Bloom Effect</span>
+                        <input type="checkbox" id="toggle-bloom" checked class="sr-only peer">
+                        <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500 relative"></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Planet Info Card Overlay -->
+    <div id="info-card" class="absolute bottom-6 right-6 z-20 w-80 sm:w-96 glass-panel rounded-2xl p-5 shadow-2xl transition-all duration-500 transform translate-y-10 opacity-0 pointer-events-none">
+        <div class="flex items-start justify-between border-b border-slate-700/60 pb-3 mb-3">
+            <div>
+                <span id="info-type" class="text-[10px] font-bold tracking-widest uppercase text-cyan-400">Sayyora</span>
+                <h2 id="info-title" class="text-2xl font-bold text-white tracking-wide">Quyosh</h2>
+            </div>
+            <button id="close-info" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <p id="info-desc" class="text-xs text-slate-300 leading-relaxed mb-4">
+            Quyosh - Quyosh tizimining markaziy yulduzi...
+        </p>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <div class="text-slate-400 text-[10px]">Radiusi:</div>
+                <div id="info-radius" class="font-semibold text-slate-100">696,340 km</div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <div class="text-slate-400 text-[10px]">Quyoshdan masofa:</div>
+                <div id="info-distance" class="font-semibold text-slate-100">0 km</div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <div class="text-slate-400 text-[10px]">Aylanish davri:</div>
+                <div id="info-period" class="font-semibold text-slate-100">-</div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                <div class="text-slate-400 text-[10px]">Yo'ldoshlar soni:</div>
+                <div id="info-moons" class="font-semibold text-slate-100">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions Overlay -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 hidden md:flex items-center gap-4 text-[11px] text-slate-400 bg-slate-950/70 px-4 py-1.5 rounded-full border border-slate-800 backdrop-blur-md pointer-events-none">
+        <span><i class="fa-solid fa-mouse text-cyan-400 mr-1"></i> Aylantirish: Chap tugma</span>
+        <span>•</span>
+        <span><i class="fa-solid fa-up-down-left-right text-cyan-400 mr-1"></i> Pan: O'ng tugma</span>
+        <span>•</span>
+        <span><i class="fa-solid fa-magnifying-glass-plus text-cyan-400 mr-1"></i> Kattalashtirish: Scroll</span>
+    </div>
+
+    <script>
+        // Detailed Data for All Celestial Bodies
+        const PLANET_DATA = [
+            {
+                id: 'sun',
+                name: 'Quyosh',
+                englishName: 'Sun',
+                radius: 14,
+                color: 0xffaa00,
+                emissive: 0xff6600,
+                distance: 0,
+                speed: 0,
+                realRadius: '696,340 km',
+                realDistance: '0 km',
+                period: '25 kun (ekvator)',
+                moons: '8 ta sayyora',
+                desc: 'Quyosh - Quyosh tizimining markazidagi yulduz. U plazmaning deyarli mukammal sharisiz shakli bo\'lib, termoyadroviy reaksiya tufayli ulkan issiqlik va yorug\'lik taratadi.'
+            },
+            {
+                id: 'mercury',
+                name: 'Merkuriy',
+                englishName: 'Mercury',
+                radius: 1.2,
+                color: 0xa5a5a5,
+                distance: 28,
+                speed: 0.03,
+                realRadius: '2,439 km',
+                realDistance: '57.9 mln km',
+                period: '88 kun',
+                moons: '0',
+                desc: 'Merkuriy - Quyoshga eng yaqin va Quyosh tizimidagi eng kichik sayyora. Uning sirti Oy singari kraterlar bilan qoplangan, atmosferasi yo\'q darajada juza.'
+            },
+            {
+                id: 'venus',
+                name: 'Venera',
+                englishName: 'Venus',
+                radius: 2.2,
+                color: 0xe3bb76,
+                distance: 42,
+                speed: 0.022,
+                realRadius: '6,051 km',
+                realDistance: '108.2 mln km',
+                period: '225 kun',
+                moons: '0',
+                hasAtmosphere: true,
+                desc: 'Venera - O\'lchami bo\'yicha Yerga juda o\'xshash, lekin zich sulfat kislotali bulutlar va issiqxona effekti sababli Quyosh tizimidagi eng issiq sayyora (465°C).'
+            },
+            {
+                id: 'earth',
+                name: 'Yer',
+                englishName: 'Earth',
+                radius: 2.5,
+                color: 0x2233ff,
+                distance: 60,
+                speed: 0.015,
+                realRadius: '6,371 km',
+                realDistance: '149.6 mln km',
+                period: '365.25 kun',
+                moons: '1 (Oy)',
+                hasMoon: true,
+                hasClouds: true,
+                desc: 'Yer - Bizning uyimiz va hayot mavjud bo\'lgan yagona ma\'lum osmon jismi. Sirtining 71% qismini suv okeanlari egallaydi.'
+            },
+            {
+                id: 'mars',
+                name: 'Mars',
+                englishName: 'Mars',
+                radius: 1.6,
+                color: 0xc1440e,
+                distance: 80,
+                speed: 0.011,
+                realRadius: '3,389 km',
+                realDistance: '227.9 mln km',
+                period: '687 kun',
+                moons: '2 (Fobos, Deimos)',
+                desc: 'Mars - "Qizil sayyora" deb ham ataladi. Sirtidagi temir oksidi (zanji) unga qizg\'ish tus beradi. Unda Quyosh tizimidagi eng baland vulqon - Olimp tog\'i joylashgan.'
+            },
+            {
+                id: 'jupiter',
+                name: 'Yupiter',
+                englishName: 'Jupiter',
+                radius: 6.5,
+                color: 0xd8ca9d,
+                distance: 120,
+                speed: 0.007,
+                realRadius: '69,911 km',
+                realDistance: '778.5 mln km',
+                period: '12 yil',
+                moons: '95 ta',
+                hasBands: true,
+                desc: 'Yupiter - Quyosh tizimidagi eng ulkan gaz giganti. Mashhur "Katta Qizil Dog\'" bo\'roni bir necha asrlardan beri davom etib kelmoqda.'
+            },
+            {
+                id: 'saturn',
+                name: 'Saturn',
+                englishName: 'Saturn',
+                radius: 5.2,
+                color: 0xead6b8,
+                distance: 165,
+                speed: 0.005,
+                realRadius: '58,232 km',
+                realDistance: '1.4 mlrd km',
+                period: '29.5 yil',
+                moons: '146 ta',
+                hasRings: true,
+                desc: 'Saturn - Muazzam va va ulkan halqalar tizimi bilan mashhur bo\'lgan gaz giganti. Halqalar asosan muz bo\'laklari va kosmik changdan tashkil topgan.'
+            },
+            {
+                id: 'uranus',
+                name: 'Uran',
+                englishName: 'Uranus',
+                radius: 3.8,
+                color: 0x4b70dd,
+                distance: 210,
+                speed: 0.003,
+                realRadius: '25,362 km',
+                realDistance: '2.9 mlrd km',
+                period: '84 yil',
+                moons: '28 ta',
+                hasRings: true,
+                desc: 'Uran - Muzli gigant. Metan gazi sababli firuza-ko\'k rangda ko\'rinadi. O\'z o\'qi atrofida deyarli "yonboshlagan" holatda aylanadi.'
+            },
+            {
+                id: 'neptune',
+                name: 'Neptun',
+                englishName: 'Neptune',
+                radius: 3.6,
+                color: 0x274687,
+                distance: 255,
+                speed: 0.002,
+                realRadius: '24,622 km',
+                realDistance: '4.5 mlrd km',
+                period: '165 yil',
+                moons: '16 ta',
+                desc: 'Neptun - Quyosh tizimidagi eng olis asosiy sayyora. U yerda eng kuchli va shiddatli kosmik shamollar (2000 km/soatgacha) esadi.'
+            }
+        ];
+
+        // Global variables setup
+        let scene, camera, renderer, composer, controls;
+        let planetObjects = [];
+        let orbitLines = [];
+        let constellationGroup;
+        let milkyWayParticles;
+        let selectedObject = null;
+        let timeSpeed = 1.0;
+        let bloomPass = null;
+        let usePostProcessing = false;
+
+        const labelsContainer = document.getElementById('labels-container');
+        const planetNav = document.getElementById('planet-nav');
+        const infoCard = document.getElementById('info-card');
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // 1. Scene setup
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x020617, 0.0006);
+
+            // 2. Camera setup
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2500);
+            camera.position.set(0, 130, 290);
+
+            // 3. Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 800;
+            controls.minDistance = 6;
+
+            // 5. Lighting
+            const ambientLight = new THREE.AmbientLight(0x334155, 1.5);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.PointLight(0xffffff, 2.8, 1500, 0.2);
+            scene.add(sunLight);
+
+            // 6. Post-Processing Setup with Safe Fallback
+            try {
+                if (window.THREE.EffectComposer && window.THREE.UnrealBloomPass) {
+                    const renderScene = new THREE.RenderPass(scene, camera);
+                    bloomPass = new THREE.UnrealBloomPass(
+                        new THREE.Vector2(width, height),
+                        1.2, // Bloom strength
+                        0.4, // Radius
+                        0.2  // Threshold
+                    );
+
+                    composer = new THREE.EffectComposer(renderer);
+                    composer.addPass(renderScene);
+                    composer.addPass(bloomPass);
+                    usePostProcessing = true;
+                }
+            } catch (err) {
+                console.warn("Post-processing (Bloom) unsupported, reverting to standard renderer:", err);
+                usePostProcessing = false;
+            }
+
+            // Create 3D Scene Components
+            createDeepSpaceBackground();
+            createMilkyWayDust();
+            createConstellations();
+            createAsteroidBelt();
+            createSolarSystem();
+
+            // Setup Navigation and Control Handlers
+            buildNavigationUI();
+            setupControlsUI();
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('pointerdown', onPointerDown);
+
+            // Initial view focus
+            setTimeout(() => {
+                selectPlanet('sun');
+            }, 300);
+        }
+
+        function createNoiseTexture(type, baseColorHex, detailColorHex) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = baseColorHex;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (type === 'jupiter' || type === 'saturn') {
+                for (let y = 0; y < canvas.height; y++) {
+                    let n = Math.sin(y * 0.08) * Math.cos(y * 0.04);
+                    if (Math.random() > 0.25) {
+                        ctx.fillStyle = detailColorHex;
+                        ctx.globalAlpha = Math.abs(n) * 0.6;
+                        ctx.fillRect(0, y, canvas.width, 1 + Math.random() * 5);
+                    }
+                }
+            } else {
+                for (let i = 0; i < 3500; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const r = Math.random() * 2.5 + 0.5;
+                    ctx.fillStyle = detailColorHex;
+                    ctx.globalAlpha = Math.random() * 0.35;
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            return texture;
+        }
+
+        function createDeepSpaceBackground() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const count = 10000;
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                const r = 900 + Math.random() * 600;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+
+                const c = new THREE.Color();
+                const rand = Math.random();
+                if (rand > 0.8) c.setHex(0x93c5fd);
+                else if (rand > 0.6) c.setHex(0xfde047);
+                else if (rand > 0.5) c.setHex(0xf472b6);
+                else c.setHex(0xffffff);
+
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+            }
+
+            starsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const starsMaterial = new THREE.PointsMaterial({
+                size: 1.6,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9
+            });
+
+            const starField = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(starField);
+        }
+
+        function createMilkyWayDust() {
+            const count = 4500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            const color1 = new THREE.Color(0x7e22ce);
+            const color2 = new THREE.Color(0x0284c7);
+            const color3 = new THREE.Color(0xe11d48);
+
+            for (let i = 0; i < count; i++) {
+                const dist = 320 + Math.random() * 550;
+                const angle = (Math.random() - 0.5) * Math.PI * 2;
+                const spread = (Math.random() - 0.5) * 140;
+
+                positions[i * 3] = Math.cos(angle) * dist + spread;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 90;
+                positions[i * 3 + 2] = Math.sin(angle) * dist + spread;
+
+                let c = color1.clone();
+                const rand = Math.random();
+                if (rand > 0.5) c = color2.clone();
+                if (rand > 0.8) c = color3.clone();
+
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 4.0,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.4,
+                blending: THREE.AdditiveBlending
+            });
+
+            milkyWayParticles = new THREE.Points(geometry, material);
+            milkyWayParticles.rotation.x = Math.PI / 5;
+            scene.add(milkyWayParticles);
+        }
+
+        function createConstellations() {
+            constationGroup = new THREE.Group();
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.3
+            });
+
+            for (let c = 0; c < 12; c++) {
+                const angle = (c / 12) * Math.PI * 2;
+                const baseR = 700;
+                const points = [];
+
+                const numPoints = 5 + Math.floor(Math.random() * 4);
+                let currentPos = new THREE.Vector3(
+                    Math.cos(angle) * baseR,
+                    (Math.random() - 0.5) * 280,
+                    Math.sin(angle) * baseR
+                );
+
+                for (let i = 0; i < numPoints; i++) {
+                    points.push(currentPos.clone());
+                    currentPos.add(new THREE.Vector3(
+                        (Math.random() - 0.5) * 70,
+                        (Math.random() - 0.5) * 70,
+                        (Math.random() - 0.5) * 70
+                    ));
+                }
+
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, lineMaterial);
+                constationGroup.add(line);
+            }
+
+            scene.add(constationGroup);
+        }
+
+        function createAsteroidBelt() {
+            const count = 2500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+
+            const innerR = 92;
+            const outerR = 108;
+
+            for (let i = 0; i < count; i++) {
+                const r = innerR + Math.random() * (outerR - innerR);
+                const theta = Math.random() * Math.PI * 2;
+
+                positions[i * 3] = r * Math.cos(theta);
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 8;
+                positions[i * 3 + 2] = r * Math.sin(theta);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({
+                color: 0x94a3b8,
+                size: 1.2,
+                transparent: true,
+                opacity: 0.75
+            });
+
+            const asteroidBelt = new THREE.Points(geometry, material);
+            scene.add(asteroidBelt);
+        }
+
+        function createSolarSystem() {
+            PLANET_DATA.forEach((data) => {
+                const pivot = new THREE.Group();
+                scene.add(pivot);
+
+                let mesh;
+
+                if (data.id === 'sun') {
+                    // Sun Mesh
+                    const sunGeo = new THREE.SphereGeometry(data.radius, 64, 64);
+                    const sunMat = new THREE.MeshBasicMaterial({
+                        color: 0xffb700
+                    });
+                    mesh = new THREE.Mesh(sunGeo, sunMat);
+
+                    // Sun Corona Glow Atmosphere
+                    const coronaGeo = new THREE.SphereGeometry(data.radius * 1.2, 32, 32);
+                    const coronaMat = new THREE.MeshBasicMaterial({
+                        color: 0xff6600,
+                        transparent: true,
+                        opacity: 0.25,
+                        side: THREE.BackSide
+                    });
+                    const corona = new THREE.Mesh(coronaGeo, coronaMat);
+                    mesh.add(corona);
+
+                } else {
+                    const geo = new THREE.SphereGeometry(data.radius, 48, 48);
+                    
+                    let tex;
+                    if (data.id === 'jupiter') tex = createNoiseTexture('jupiter', '#d8ca9d', '#8c6f43');
+                    else if (data.id === 'saturn') tex = createNoiseTexture('saturn', '#ead6b8', '#a88d67');
+                    else tex = createNoiseTexture('rock', '#' + data.color.toString(16), '#000000');
+
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: data.color,
+                        map: tex,
+                        roughness: 0.65,
+                        metalness: 0.1
+                    });
+
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.x = data.distance;
+
+                    // Atmosphere for Earth / Venus
+                    if (data.hasAtmosphere || data.id === 'earth') {
+                        const atmosGeo = new THREE.SphereGeometry(data.radius * 1.06, 32, 32);
+                        const atmosMat = new THREE.MeshPhongMaterial({
+                            color: data.id === 'earth' ? 0x38bdf8 : 0xfde047,
+                            transparent: true,
+                            opacity: 0.22,
+                            blending: THREE.AdditiveBlending
+                        });
+                        const atmosphere = new THREE.Mesh(atmosGeo, atmosMat);
+                        mesh.add(atmosphere);
+                    }
+
+                    // Saturn Rings
+                    if (data.hasRings) {
+                        const ringGeo = new THREE.RingGeometry(data.radius * 1.4, data.radius * 2.3, 64);
+                        ringGeo.rotateX(Math.PI / 2);
+
+                        const ringMat = new THREE.MeshStandardMaterial({
+                            color: 0xd1d5db,
+                            side: THREE.DoubleSide,
+                            transparent: true,
+                            opacity: 0.8
+                        });
+                        const ring = new THREE.Mesh(ringGeo, ringMat);
+                        mesh.add(ring);
+                    }
+
+                    // Earth's Moon
+                    if (data.hasMoon) {
+                        const moonGeo = new THREE.SphereGeometry(0.6, 16, 16);
+                        const moonMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.9 });
+                        const moon = new THREE.Mesh(moonGeo, moonMat);
+                        moon.position.set(4.2, 0, 0);
+                        mesh.add(moon);
+                        mesh.moon = moon;
+                    }
+
+                    // Orbit Ring Line
+                    const orbitGeo = new THREE.BufferGeometry();
+                    const points = [];
+                    const segments = 128;
+                    for (let i = 0; i <= segments; i++) {
+                        const theta = (i / segments) * Math.PI * 2;
+                        points.push(new THREE.Vector3(Math.cos(theta) * data.distance, 0, Math.sin(theta) * data.distance));
+                    }
+                    orbitGeo.setFromPoints(points);
+
+                    const orbitMat = new THREE.LineBasicMaterial({
+                        color: 0x38bdf8,
+                        transparent: true,
+                        opacity: 0.2
+                    });
+                    const orbitLine = new THREE.LineLoop(orbitGeo, orbitMat);
+                    scene.add(orbitLine);
+                    orbitLines.push(orbitLine);
+                }
+
+                pivot.add(mesh);
+
+                // Create HTML Label
+                const labelEl = document.createElement('div');
+                labelEl.className = 'planet-label';
+                labelEl.innerHTML = `<i class="fa-solid fa-circle text-[7px] text-cyan-400"></i> ${data.name}`;
+                labelsContainer.appendChild(labelEl);
+
+                planetObjects.push({
+                    data: data,
+                    pivot: pivot,
+                    mesh: mesh,
+                    labelEl: labelEl,
+                    angle: Math.random() * Math.PI * 2
+                });
+            });
+        }
+
+        function buildNavigationUI() {
+            planetNav.innerHTML = '';
+            PLANET_DATA.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = `px-2.5 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
+                    p.id === 'sun' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-300 hover:bg-slate-800/60'
+                }`;
+                btn.innerHTML = p.name;
+                btn.onclick = () => selectPlanet(p.id);
+                btn.dataset.id = p.id;
+                planetNav.appendChild(btn);
+            });
+        }
+
+        function setupControlsUI() {
+            const speedInput = document.getElementById('time-speed');
+            const speedVal = document.getElementById('speed-val');
+            speedInput.addEventListener('input', (e) => {
+                timeSpeed = parseFloat(e.target.value);
+                speedVal.textContent = timeSpeed + 'x';
+            });
+
+            document.getElementById('toggle-orbits').addEventListener('change', (e) => {
+                orbitLines.forEach(line => line.visible = e.target.checked);
+            });
+
+            document.getElementById('toggle-labels').addEventListener('change', (e) => {
+                labelsContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+
+            document.getElementById('toggle-constellations').addEventListener('change', (e) => {
+                if (constationGroup) constationGroup.visible = e.target.checked;
+            });
+
+            document.getElementById('toggle-bloom').addEventListener('change', (e) => {
+                if (bloomPass) bloomPass.enabled = e.target.checked;
+            });
+
+            document.getElementById('reset-cam-btn').addEventListener('click', () => {
+                selectedObject = null;
+                hideInfoCard();
+                updateNavStyles(null);
+                
+                animateCameraTo(new THREE.Vector3(0, 140, 290), new THREE.Vector3(0, 0, 0));
+            });
+
+            document.getElementById('close-info').addEventListener('click', hideInfoCard);
+        }
+
+        function updateNavStyles(activeId) {
+            const buttons = planetNav.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (btn.dataset.id === activeId) {
+                    btn.classList.add('bg-cyan-500/30', 'text-cyan-300', 'border', 'border-cyan-400/40');
+                    btn.classList.remove('text-slate-300');
+                } else {
+                    btn.classList.remove('bg-cyan-500/30', 'text-cyan-300', 'border', 'border-cyan-400/40');
+                    btn.classList.add('text-slate-300');
+                }
+            });
+        }
+
+        function selectPlanet(planetId) {
+            const targetObj = planetObjects.find(p => p.data.id === planetId);
+            if (!targetObj) return;
+
+            selectedObject = targetObj;
+            updateNavStyles(planetId);
+            showInfoCard(targetObj.data);
+        }
+
+        function showInfoCard(data) {
+            document.getElementById('info-type').textContent = data.id === 'sun' ? 'Yulduz' : 'Sayyora';
+            document.getElementById('info-title').textContent = data.name;
+            document.getElementById('info-desc').textContent = data.desc;
+            document.getElementById('info-radius').textContent = data.realRadius;
+            document.getElementById('info-distance').textContent = data.realDistance;
+            document.getElementById('info-period').textContent = data.period;
+            document.getElementById('info-moons').textContent = data.moons || '0';
+
+            infoCard.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none');
+            infoCard.classList.add('opacity-100', 'translate-y-0');
+        }
+
+        function hideInfoCard() {
+            infoCard.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none');
+            infoCard.classList.remove('opacity-100', 'translate-y-0');
+        }
+
+        let isAnimatingCamera = false;
+        let camTargetPos = new THREE.Vector3();
+        let camTargetLookAt = new THREE.Vector3();
+
+        function animateCameraTo(targetPosition, targetLookAt) {
+            camTargetPos.copy(targetPosition);
+            camTargetLookAt.copy(targetLookAt);
+            isAnimatingCamera = true;
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onPointerDown(event) {
+            if (event.clientY < 80 || (event.clientX < 300 && event.clientY > window.innerHeight - 300)) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const meshesToIntersect = planetObjects.map(p => p.mesh);
+            const intersects = raycaster.intersectObjects(meshesToIntersect, false);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                const hitObj = planetObjects.find(p => p.mesh === hitMesh);
+                if (hitObj) {
+                    selectPlanet(hitObj.data.id);
+                }
+            }
+        }
+
+        function onWindowResize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(w, h);
+            if (usePostProcessing && composer) {
+                composer.setSize(w, h);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 1. Orbital and Rotation Calculations
+            planetObjects.forEach(obj => {
+                if (obj.data.id !== 'sun') {
+                    obj.angle += obj.data.speed * 0.015 * timeSpeed;
+                    obj.mesh.position.x = Math.cos(obj.angle) * obj.data.distance;
+                    obj.mesh.position.z = Math.sin(obj.angle) * obj.data.distance;
+
+                    obj.mesh.rotation.y += 0.01 * timeSpeed;
+
+                    if (obj.mesh.moon) {
+                        obj.mesh.moon.rotation.y += 0.02 * timeSpeed;
+                    }
+                } else {
+                    obj.mesh.rotation.y += 0.002 * timeSpeed;
+                }
+
+                // 2. Project 3D Coordinates to 2D HTML Screen Coordinates
+                const tempV = new THREE.Vector3();
+                obj.mesh.getWorldPosition(tempV);
+                tempV.y += obj.data.radius + 2.5; // Offset above sphere
+
+                tempV.project(camera);
+
+                if (tempV.z > 1) {
+                    obj.labelEl.style.opacity = '0';
+                } else {
+                    const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (tempV.y * -0.5 + 0.5) * window.innerHeight;
+
+                    obj.labelEl.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+
+                    const dist = camera.position.distanceTo(obj.mesh.position);
+                    const opacity = Math.min(Math.max((700 - dist) / 500, 0.2), 1);
+                    obj.labelEl.style.opacity = opacity.toString();
+                }
+            });
+
+            // 3. Galactic Background Rotation
+            if (milkyWayParticles) {
+                milkyWayParticles.rotation.y += 0.0001 * timeSpeed;
+            }
+
+            // 4. Camera Lerp Focus
+            if (selectedObject) {
+                const worldPos = new THREE.Vector3();
+                selectedObject.mesh.getWorldPosition(worldPos);
+
+                const offset = selectedObject.data.radius * 3.5 + 8;
+                const desiredCamPos = new THREE.Vector3(
+                    worldPos.x + offset * 0.8,
+                    worldPos.y + offset * 0.5,
+                    worldPos.z + offset
+                );
+
+                camera.position.lerp(desiredCamPos, 0.05);
+                controls.target.lerp(worldPos, 0.05);
+            } else if (isAnimatingCamera) {
+                camera.position.lerp(camTargetPos, 0.05);
+                controls.target.lerp(camTargetLookAt, 0.05);
+
+                if (camera.position.distanceTo(camTargetPos) < 1.0) {
+                    isAnimatingCamera = false;
+                }
+            }
+
+            controls.update();
+
+            // 5. Render Scene
+            if (usePostProcessing && composer) {
+                composer.render();
+            } else {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // Initialize App on Window Load
+        window.onload = () => {
+            init();
+            animate();
+        };
+    </script>
+</body>
+</html>
